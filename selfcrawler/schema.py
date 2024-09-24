@@ -1,10 +1,31 @@
 import base64
 from pathlib import Path
 from typing import List, Literal
-import markdown
 
+import markdown
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
+
+from selfcrawler.utils import Browser
+
+
+class Navigate(BaseModel):
+    """根据当前对话信息，判断下一步需要执行的操作"""
+
+    question: str = Field('', description="需要询问用户问题来获取当前缺失的信息")
+    action: str = Field('', description="需要执行的网页操作的描述")
+    finish: bool = Field(False, description="是否完成已经完成任务")
+
+
+class GraphState(TypedDict):
+    messages: list
+    action: str
+    action_response: dict
+    question: str
+    question_response: dict
+    finish: bool
+    browser: Browser
 
 
 class ImageUrl(BaseModel):
