@@ -1,7 +1,10 @@
+from typing import Callable
+
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
-from selfcrawler.schema import Content, GraphState, Navigate
+from selfcrawler.prompt import browser_prompt, critic_prompt, save_html
+from selfcrawler.schema import ActionFeedBack, Content, GraphState, Navigate
 from selfcrawler.utils import Browser
 
 
@@ -13,6 +16,9 @@ class BaseNode:
 
     def __call__(self, state: GraphState) -> GraphState:
         return state
+
+    def router(self, *args, **kwargs) -> Callable[[GraphState], str]:
+        return None
 
 
 class NavigatorNode(BaseNode):
@@ -39,8 +45,54 @@ class NavigatorNode(BaseNode):
         return state
 
 
-class PageOperatorNode(BaseNode):
-    prefix = 'OPERATOR'
+class CriticNode(BaseNode):
+    prefix = 'CRITIC'
+
+    def __init__(self, name: str = ''):
+        super().__init__(name=name)
+        self.model = ChatOpenAI(model="gpt-4o", temperature=0.8).with_structured_output(ActionFeedBack)
+
+    def __call__(self, state: GraphState):
+
+        print(state['action_error'])
+        prompt = critic_prompt(
+            task_desc=state['action'],
+            last_screenshot=state['last_screenshot'],
+            current_screenshot=state['browser'].screenshot(),
+            action_error=state['action_error']
+        )
+
+        result = self.model.invoke([prompt])
+
+        if result.finish is False:
+            state['suggestion'] = result.suggestion
+            state['have_done'] = result.have_done
+            state['to_do'] = result.to_do
+            state['error_analysis'] = result.error_analysis
+        else:
+            state['suggestion'] = ''
+            state['have_done'] = ''
+            state['to_do'] = ''
+            state['error_analysis'] = ''
+
+        print(result.model_dump_json(indent=4))
+        save_html([prompt, AIMessage(content=result.model_dump_json(indent=4))], self.name)
+        return state
+
+    @staticmethod
+    def router(browser_node_name: str, end_node_name: str):
+
+        def _router(state: GraphState) -> str:
+            if state['suggestion'] == '':
+                return end_node_name
+            else:
+                return browser_node_name
+
+        return _router
+
+
+class BrowserNode(BaseNode):
+    prefix = 'BROWSER'
 
     def __init__(self, name: str = ''):
         super().__init__(name=name)
@@ -51,77 +103,26 @@ class PageOperatorNode(BaseNode):
         if (browser := state['browser']).started is False:
             browser.start()
 
-        prompt = f"""
-            这是你的任务：
-            {state['action']}
-        
-            遵守以下规则：
-            1. 如果以下 html 没有内容，则需要先打开网页，如果已经有内容则直接进行下一步。
-            2. 创建CSS选择器时，确保它们是唯一且具体的，以便即使存在多个相同类型的元素（例如多个h1元素），也能仅选择一个元素。
-            3. 避免单独使用通用标签如'h1'。相反，结合其他属性或结构关系来形成唯一的选择器。
-            4. CSS 选择器必须符合 playwright 的 page.locator 方法的要求。
-            5. 如果页面有相关问题的答案，请直接回答问题，不要进行其他操作。
-        
-            以下是当前页面的HTML代码
-            ```html
-            {browser.get_html_content()}
-            ```
-        """
+        state['last_screenshot'] = browser.screenshot()
+        prompt = browser_prompt(
+            task_desc=state['action'],
+            suggestion=state['suggestion'],
+            have_done=state['have_done'],
+            to_do=state['to_do'],
+            html_content=browser.get_html_content(),
+            screenshot=browser.screenshot(),
+            error_analysis=state['error_analysis']
+        )
 
-        print(prompt)
-
-        result = self.model.invoke([HumanMessage(content=[
-            Content.from_text(prompt),
-            Content.from_text('以下是当前浏览器页面的截图'),
-            Content.from_base64(browser.screenshot())
-        ])])
+        result = self.model.invoke([prompt])
         print(result.model_dump_json(indent=4))
 
         if result.tool_calls:
             for tool_call in result.tool_calls:
                 func_name = tool_call['name']
                 kwargs = tool_call['args']
-                browser.exec_func(func_name, kwargs)
-
+                err = browser.exec_func(func_name, kwargs)
+                if err:
+                    state['action_error'].append(err)
+        save_html([prompt, result], self.name)
         return state
-
-
-from langchain_core.messages import HumanMessage, SystemMessage
-from dotenv import load_dotenv
-
-load_dotenv()
-messages = [
-    SystemMessage(content=[
-        Content.from_text(
-            "现在你是一个网页导航助手，根据文档描述的内容，指导用户完成相应的操作，浏览器页面大小为 1280 x 720"),
-    ]),
-    HumanMessage(content=[
-        Content.from_text("任务描述与图片指引如下\n"),
-        Content.from_text("查找一个抖音号为：yuzi9244的信息\n"),
-        Content.from_text('# 第一歩：打开网页：https://union.bytedance.com/\n'),
-        Content.from_text('# 第二歩：完成登录\n'),
-        Content.from_text('# 第三歩：点击左侧`主播列表`按钮\n'),
-        Content.from_text('# 第四歩：在右侧主播搜索框中搜索该抖音号\n'),
-        Content.from_text('# 第五歩：获取该主播的粉丝数\n'),
-    ])
-]
-
-s = GraphState(
-    # messages=messages,
-    action='打开网页：https://union.bytedance.com/',
-    question='',
-    finish=False,
-    browser=Browser()
-)
-operator = PageOperatorNode()
-
-a = operator(s)
-
-
-
-s['action'] = '确认登录'
-
-a = operator(s)
-
-with open('aaa.html', 'w') as f:
-    f.write(s['browser'].get_html_content(simplify=False))

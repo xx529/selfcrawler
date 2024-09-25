@@ -11,21 +11,41 @@ from selfcrawler.utils import Browser
 
 
 class Navigate(BaseModel):
-    """根据当前对话信息，判断下一步需要执行的操作"""
-
+    """
+    根据当前对话信息，判断下一步需要执行的操作
+    """
     question: str = Field('', description="需要询问用户问题来获取当前缺失的信息")
     action: str = Field('', description="需要执行的网页操作的描述")
     finish: bool = Field(False, description="是否完成已经完成任务")
 
 
+class ActionFeedBack(BaseModel):
+    """
+    根据当前任务已经执行完成的情况给出评价，给出是否已经完成任务，已经完成和还需要的操作，以及相关的理由
+    """
+    analysis: str = Field(description="分析当前的任务情况")
+    have_done: str = Field(description="已经完成的内容")
+    to_do: str = Field(description="给出具体还需要操作的内容，例如点击某个按钮，输入某个内容")
+    suggestion: str = Field(description="给出的下一步建议")
+    error_analysis: str = Field('', description="如果出现代码错误，针对错误代码进行分析")
+    finish: bool = Field(description="是否完成任务")
+
+
 class GraphState(TypedDict):
     messages: list
     action: str
+    action_error: list
     action_response: dict
     question: str
     question_response: dict
     finish: bool
     browser: Browser
+    last_screenshot: str
+
+    suggestion: str
+    have_done: str
+    to_do: str
+    error_analysis: str
 
 
 class ImageUrl(BaseModel):
