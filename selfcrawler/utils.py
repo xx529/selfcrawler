@@ -1,3 +1,4 @@
+import base64
 import time
 
 from bs4 import BeautifulSoup
@@ -16,6 +17,7 @@ class Browser:
         self.run("playwright = sync_playwright().start()")
         self.run("browser = playwright.chromium.launch(headless=False)")
         self.run("page = browser.new_page()")
+        self.run("""page.set_viewport_size({"width": page.evaluate("window.screen.width"), "height": page.evaluate("window.screen.height")})""")
         self.run("page.set_default_timeout(5000)")
         self.started = True
 
@@ -29,8 +31,12 @@ class Browser:
 
     def screenshot(self):
         self.repl.run("import base64")
-        base64_img = self.repl.run("print(base64.b64encode(page.screenshot(full_page=True)).decode('utf-8'))")
-        return base64_img
+        base64_img = self.repl.run("print(base64.b64encode(page.screenshot(full_page=True)).decode('utf-8'))").strip()
+        try:
+            base64.b64decode(base64_img, validate=True)
+            return base64_img
+        except Exception as _:
+            return ''
 
     def exec_func(self, name: str, kwargs: dict):
         if 'self' in kwargs:
@@ -39,7 +45,8 @@ class Browser:
 
     def run(self, code: str):
         resp = self.repl.run(code)
-        print(resp)
+        if resp:
+            print(resp)
         return resp
 
     @tool
@@ -50,7 +57,9 @@ class Browser:
             url: 需要打开的网页链接
             wait: 预估页面加载时间
         """
-        error = self.run(f'page.goto("{url}")')
+        code = 'page.goto("""{url}""")'.format(url=url)
+        code += '\npage.wait_for_load_state("load")'
+        error = self.run(code)
         time.sleep(wait)
         return error
 
@@ -61,7 +70,8 @@ class Browser:
         Args:
             css_selector: css 选择器
         """
-        error = self.run(f"""page.locator("{css_selector}").click()""")
+        code = 'page.locator("""{css_selector}""").click()'.format(css_selector=css_selector)
+        error = self.run(code)
         return error
 
     @tool
@@ -72,7 +82,8 @@ class Browser:
             css_selector: css 选择器
             text: 输入的文本
         """
-        error = self.run(f"""page.fill("{css_selector}", "{text}")""")
+        code = 'page.fill("""{css_selector}""", """{text}""")'.format(css_selector=css_selector, text=text)
+        error = self.run(code)
         return error
 
     @tool
@@ -95,7 +106,7 @@ class Browser:
 
     @classmethod
     def actions(cls):
-        return [cls.open_url, cls.click_element, cls.input_text]
+        return [cls.open_url, cls.click_element, cls.input_text, cls.wait]
 
     @staticmethod
     def simplify_html(html_content: str) -> str:
