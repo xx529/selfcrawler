@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage
 from selfcrawler.schema import Content, MessageToMarkdown
 
 
-def save_prompt_complition(msg, prefix):
+def save_prompt_completion(msg, prefix):
     _msg = msg if isinstance(msg, list) else [msg]
     MessageToMarkdown(messages=_msg).to_markdown(
         f'/Users/lzx/Documents/GitHub/selfcrawler/reqdoc/prompt/{int(time.time())}_{prefix}.md'

@@ -14,7 +14,7 @@ class Navigate(BaseModel):
     """
     根据当前对话信息，判断下一步需要执行的操作
     """
-    question: str = Field('', description="需要询问用户问题来获取当前缺失的信息")
+    question: str = Field('', description="需要询问用户问题来获取当前缺失的信息或者进一步的任务")
     action: str = Field('', description="需要执行的网页操作的描述")
     is_task_finish: bool = Field(False, description="是否完成已经完成任务")
 
@@ -34,6 +34,7 @@ class ActionFeedBack(BaseModel):
 class GraphState(TypedDict):
     messages: list
     browser: Browser
+    sender: str
 
     # action_response: dict
     # question: str
@@ -41,7 +42,8 @@ class GraphState(TypedDict):
 
     # navigator
     action: str
-    task_finish: bool
+    question: str
+    is_task_finish: bool
 
     # browser
     last_screenshot: str

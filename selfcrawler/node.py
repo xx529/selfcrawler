@@ -1,11 +1,10 @@
 import json
-import time
 from typing import Callable
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
-from selfcrawler.prompt import browser_prompt, critic_prompt, save_prompt_complition
+from selfcrawler.prompt import browser_prompt, critic_prompt, save_prompt_completion
 from selfcrawler.schema import ActionFeedBack, Content, GraphState, Navigate
 from selfcrawler.utils import Browser
 
@@ -34,32 +33,42 @@ class NavigatorNode(BaseNode):
 
         state['action'] = input("请输入浏览器操作描述：\n")
 
-        if state['action'] in ['exit', 'bye', 'gg']:
-            state['task_finish'] = True
-        # result = self.model.invoke(state['messages'])
+        # result: Navigate = self.model.invoke(state['messages'])
+        # print(result)
+
+        # if result.is_task_finish is True:
+        #     state['is_task_finish'] = True
+        #
+        # if state['action'] in ['exit', 'bye', 'gg']:
+        #     state['is_task_finish'] = True
+        #
+        # if state['messages'][-1].content in ['exit', 'bye', 'gg']:
+        #     state['is_task_finish'] = True
         #
         # if result.question:
-        #     content = Content.from_text(result.question)
+        #     state['messages'].append(AIMessage(content=result.question))
         #     state['question'] = result.question
-        # elif result.action:
-        #     content = Content.from_text(result.action)
-        #     state['action'] = result.action
-        # else:
-        #     state['finish'] = True
-        #     content = Content.from_text("出现错误了，强制退出")
         #
-        # state['messages'].append(AIMessage(content=[content]))
-
+        # elif result.action:
+        #     state['messages'].append(AIMessage(content=result.action))
+        #     state['action'] = result.action
+        #
+        # save_prompt_completion(state['messages'], self.name)
+        # state['sender'] = self.prefix
         return state
 
     @staticmethod
-    def router(browser_node_name: str, end_node_name: str):
+    def router(browser_node_name: str, end_node_name: str, user_node_name: str):
 
         def _router(state: GraphState) -> str:
-            if state['task_finish'] is True:
+            if state['is_task_finish'] is True:
                 return end_node_name
-            else:
+            if state['action']:
                 return browser_node_name
+            if state['question']:
+                return user_node_name
+            else:
+                raise Exception("NavigatorNode router error")
 
         return _router
 
@@ -81,7 +90,7 @@ class CriticNode(BaseNode):
             action_response=state['action_response']
         )
 
-        result = self.model.invoke([prompt])
+        result: ActionFeedBack = self.model.invoke([prompt])
         print(result.model_dump_json(indent=4))
 
         state['is_action_finish'] = result.is_action_finish
@@ -99,7 +108,8 @@ class CriticNode(BaseNode):
             state['todo'] = ''
             state['code_error_analysis'] = ''
 
-        save_prompt_complition([prompt, AIMessage(content=result.model_dump_json(indent=4))], self.name)
+        save_prompt_completion([prompt, AIMessage(content=result.model_dump_json(indent=4))], self.name)
+        state['sender'] = self.prefix
         return state
 
     @staticmethod
@@ -152,5 +162,19 @@ class BrowserNode(BaseNode):
             state['action_response'] = result.content
             msg = AIMessage(content=[Content.from_text(result.content)])
 
-        save_prompt_complition([prompt, msg], self.name)
+        save_prompt_completion([prompt, msg], self.name)
+        state['sender'] = self.prefix
+        return state
+
+
+class UserNode(BaseNode):
+    prefix = 'USER'
+
+    def __init__(self, name: str = ''):
+        super().__init__(name=name)
+
+    def __call__(self, state: GraphState) -> GraphState:
+        response = input(f"{state['question']}\n请输入提示：\n")
+        state['messages'].append(HumanMessage(content=response))
+        state['sender'] = self.prefix
         return state
