@@ -73,6 +73,49 @@ class NavigatorNode(BaseNode):
         return _router
 
 
+class BrowserNode(BaseNode):
+    prefix = 'BROWSER'
+
+    def __init__(self, name: str = ''):
+        super().__init__(name=name)
+        self.model = ChatOpenAI(model="gpt-4o", temperature=0.8).bind_tools(Browser.actions())
+
+    def __call__(self, state: GraphState) -> GraphState:
+
+        if (browser := state['browser']).started is False:
+            browser.start()
+
+        state['last_screenshot'] = browser.screenshot()
+        prompt = browser_prompt(
+            task_desc=state['action'],
+            suggestion=state['suggestion'],
+            done=state['done'],
+            todo=state['todo'],
+            html_content=browser.get_html_content(),
+            screenshot=browser.screenshot(),
+            code_error_analysis=state['code_error_analysis']
+        )
+
+        result = self.model.invoke([prompt])
+        print(result.model_dump_json(indent=4))
+
+        if result.tool_calls:
+            msg = AIMessage(content=[Content.from_text(f"```json\n{json.dumps(result.tool_calls, indent=4)}\n```")])
+            for tool_call in result.tool_calls:
+                func_name = tool_call['name']
+                kwargs = tool_call['args']
+                err = browser.exec_func(func_name, kwargs)
+                if err:
+                    state['code_error'].append(err)
+        else:
+            state['action_response'] = result.content
+            msg = AIMessage(content=[Content.from_text(result.content)])
+
+        save_prompt_completion([prompt, msg], self.name)
+        state['sender'] = self.prefix
+        return state
+
+
 class CriticNode(BaseNode):
     prefix = 'CRITIC'
 
@@ -122,49 +165,6 @@ class CriticNode(BaseNode):
                 return browser_node_name
 
         return _router
-
-
-class BrowserNode(BaseNode):
-    prefix = 'BROWSER'
-
-    def __init__(self, name: str = ''):
-        super().__init__(name=name)
-        self.model = ChatOpenAI(model="gpt-4o", temperature=0.8).bind_tools(Browser.actions(), tool_choice='required')
-
-    def __call__(self, state: GraphState) -> GraphState:
-
-        if (browser := state['browser']).started is False:
-            browser.start()
-
-        state['last_screenshot'] = browser.screenshot()
-        prompt = browser_prompt(
-            task_desc=state['action'],
-            suggestion=state['suggestion'],
-            done=state['done'],
-            todo=state['todo'],
-            html_content=browser.get_html_content(),
-            screenshot=browser.screenshot(),
-            code_error_analysis=state['code_error_analysis']
-        )
-
-        result = self.model.invoke([prompt])
-        print(result.model_dump_json(indent=4))
-
-        if result.tool_calls:
-            msg = AIMessage(content=[Content.from_text(f"```json\n{json.dumps(result.tool_calls, indent=4)}\n```")])
-            for tool_call in result.tool_calls:
-                func_name = tool_call['name']
-                kwargs = tool_call['args']
-                err = browser.exec_func(func_name, kwargs)
-                if err:
-                    state['code_error'].append(err)
-        else:
-            state['action_response'] = result.content
-            msg = AIMessage(content=[Content.from_text(result.content)])
-
-        save_prompt_completion([prompt, msg], self.name)
-        state['sender'] = self.prefix
-        return state
 
 
 class UserNode(BaseNode):

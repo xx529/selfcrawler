@@ -68,6 +68,6 @@ state = GraphState(
     is_action_finish='',
 )
 
-# app.invoke(state, {'recursion_limit': 100})
+app.invoke(state, {'recursion_limit': 100})
 # for event in app.·stream(state, stream_mode='values'):
 #     print(event)
