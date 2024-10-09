@@ -80,8 +80,9 @@ def critic_prompt(
         Content.from_text(f"**执行前的页面截图**\n\n"),
         Content.from_base64(last_screenshot) if last_screenshot else Content.from_text('无截图\n\n'),
         Content.from_text(f"**执行相关操作后的页面截图**\n\n"),
-        Content.from_text(action_response + '\n\n'),
         Content.from_base64(current_screenshot) if current_screenshot else Content.from_text('无截图\n\n'),
+        Content.from_text('来自浏览器的自描述：\n\n'),
+        Content.from_text(action_response + '\n\n'),
         Content.from_text(f"**执行过程中出现的错误**{code_error}\n\n")
     ])
 

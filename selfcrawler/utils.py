@@ -13,6 +13,7 @@ class Browser:
         self.started = False
 
     def start(self):
+        self.run("import base64")
         self.run("from playwright.sync_api import sync_playwright")
         self.run("playwright = sync_playwright().start()")
         self.run("browser = playwright.chromium.launch(headless=False)")
@@ -21,8 +22,19 @@ class Browser:
         self.run("page.set_default_timeout(5000)")
         self.started = True
 
+    def wait_for_change(self):
+        old_img = self.screenshot()
+        time.sleep(1)
+        count = 0
+        while (new_img := self.screenshot()) != old_img:
+            time.sleep(1)
+            old_img = new_img
+            count += 1
+            if count > 10:
+                break
+
     def get_html_content(self, simplify=True):
-        html_content = self.repl.run("print(page.content())")
+        html_content = self.run("print(page.content())")
 
         if simplify:
             html_content = self.simplify_html(html_content)
@@ -30,8 +42,7 @@ class Browser:
         return html_content
 
     def screenshot(self):
-        self.repl.run("import base64")
-        base64_img = self.repl.run("print(base64.b64encode(page.screenshot(full_page=True)).decode('utf-8'))").strip()
+        base64_img = self.run("print(base64.b64encode(page.screenshot(full_page=True)).decode('utf-8'))").strip()
         try:
             base64.b64decode(base64_img, validate=True)
             return base64_img
@@ -72,6 +83,7 @@ class Browser:
         """
         code = 'page.locator("""{css_selector}""").click()'.format(css_selector=css_selector)
         error = self.run(code)
+        self.wait_for_change()
         return error
 
     @tool
@@ -84,6 +96,7 @@ class Browser:
         """
         code = 'page.fill("""{css_selector}""", """{text}""")'.format(css_selector=css_selector, text=text)
         error = self.run(code)
+        self.wait_for_change()
         return error
 
     @tool
@@ -103,6 +116,15 @@ class Browser:
         """
         time.sleep(seconds)
         return None
+
+    @tool()
+    def refresh(self):
+        """
+        当页面加载数据出现问题或者部分元素加载不成功时候进行刷新页面
+        """
+        error = self.run("page.reload()")
+        self.wait_for_change()
+        return error
 
     @classmethod
     def actions(cls):
