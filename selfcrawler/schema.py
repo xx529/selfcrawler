@@ -1,4 +1,5 @@
 import base64
+import re
 from pathlib import Path
 from typing import List, Literal
 
@@ -99,6 +100,46 @@ class Content:
     @staticmethod
     def from_base64(base64_img: str) -> dict:
         return ImageContent(image_url=ImageUrl.from_base64(base64_img=base64_img)).model_dump()
+
+
+class MultimodalMessage(BaseModel):
+    contents: List[ImageContent | TextContent] = Field(default_factory=list, description="消息内容")
+
+    @classmethod
+    def from_md(cls, md: str) -> 'MultimodalMessage':
+        pattern = r'!\[\]\((data:image/png;base64,[a-zA-Z0-9+/=]+)\)'
+        match_ls = list(re.finditer(pattern, md))
+
+        if len(match_ls) == 0:
+            return cls(contents=[TextContent(text=md)])
+
+        contents = []
+        cur_idx = 0
+        for m in match_ls:
+            contents.append(TextContent(text=md[cur_idx:m.start()]))
+            contents.append(ImageContent(image_url=ImageUrl(url=m[1])))
+            cur_idx = m.end()
+
+        contents.append(TextContent(text=md[cur_idx:]))
+        return cls(contents=contents)
+
+    def to_dict(self):
+        return [x.model_dump() for x in self.contents]
+
+    @property
+    def md(self):
+        string = ''
+        for content in self.contents:
+            match content:
+                case TextContent():
+                    string += content.text
+                case ImageContent():
+                    string += f'\n\n![]({content.image_url.url})\n\n'
+        return ''.join([x.to_text() for x in self.contents])
+
+    def save(self, path):
+        with open(path, 'w') as f:
+            f.write(self.md)
 
 
 class ActionResponse(BaseModel):

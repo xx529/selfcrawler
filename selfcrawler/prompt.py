@@ -2,7 +2,7 @@ import time
 
 from langchain_core.messages import HumanMessage
 
-from selfcrawler.schema import Content, MessageToMarkdown
+from selfcrawler.schema import Content, MessageToMarkdown, MultimodalMessage
 
 
 def save_prompt_completion(msg, prefix):
@@ -55,14 +55,12 @@ def browser_prompt(
 ```html
 {html_content}
 ```
+
+**以下是当前浏览器页面的截图**
+{f'![](data:image/png;base64,{screenshot})' if screenshot else '暂无截图'}
 """
 
-    msg = HumanMessage(content=[
-        Content.from_text(prompt),
-        Content.from_text('**以下是当前浏览器页面的截图**'),
-        Content.from_base64(screenshot) if screenshot else Content.from_text('无截图')
-    ])
-    return msg
+    return HumanMessage(content=MultimodalMessage.from_md(prompt).to_dict())
 
 
 def critic_prompt(

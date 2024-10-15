@@ -100,7 +100,7 @@ class BrowserNode(BaseNode):
         print(result.model_dump_json(indent=4))
 
         if result.tool_calls:
-            msg = AIMessage(content=[Content.from_text(f"```json\n{json.dumps(result.tool_calls, indent=4)}\n```")])
+            msg = AIMessage(content=[Content.from_text(f"\n\n```json\n{json.dumps(result.tool_calls, indent=4)}\n```")])
             for tool_call in result.tool_calls:
                 func_name = tool_call['name']
                 kwargs = tool_call['args']

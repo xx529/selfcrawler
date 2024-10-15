@@ -56,11 +56,11 @@ class Browser:
 
     def run(self, code: str):
         resp = self.repl.run(code)
-        if resp:
-            print(resp)
+        # if resp:
+        #     print(resp)
         return resp
 
-    @tool
+    @tool(parse_docstring=True)
     def open_url(self, url: str, wait: int = 5):
         """在谷歌浏览器中打开该网页.
 
@@ -74,7 +74,7 @@ class Browser:
         time.sleep(wait)
         return error
 
-    @tool
+    @tool(parse_docstring=True)
     def click_element(self, css_selector: str):
         """根据 css_selector 定位页面元素并进行点击操作
 
@@ -86,7 +86,7 @@ class Browser:
         self.wait_for_change()
         return error
 
-    @tool
+    @tool(parse_docstring=True)
     def input_text(self, css_selector: str, text: str):
         """根据 css_selector 定位页面元素并输入文本
 
@@ -99,7 +99,7 @@ class Browser:
         self.wait_for_change()
         return error
 
-    @tool
+    @tool(parse_docstring=True)
     def go_back(self):
         """
         浏览器回退操作
@@ -107,17 +107,18 @@ class Browser:
         error = self.run("page.go_back()")
         return error
 
-    @tool
+    @tool(parse_docstring=True)
     def wait(self, seconds: int):
         """
         预估操作后等待页面加载时间
+
         Args:
             seconds: 等待时间
         """
         time.sleep(seconds)
         return None
 
-    @tool()
+    @tool(parse_docstring=True)
     def refresh(self):
         """
         当页面加载数据出现问题或者部分元素加载不成功时候进行刷新页面
@@ -126,9 +127,20 @@ class Browser:
         self.wait_for_change()
         return error
 
+    @tool(parse_docstring=True)
+    def evaluate(self, js_code: str):
+        """
+        在页面中执行 JavaScript 代码
+
+        Args:
+            js_code: JavaScript 代码
+        """
+        error = self.run(f'page.evaluate("""{js_code}""")')
+        return error
+
     @classmethod
     def actions(cls):
-        return [cls.open_url, cls.click_element, cls.input_text, cls.wait]
+        return [cls.open_url, cls.click_element, cls.input_text, cls.wait, cls.evaluate]
 
     @staticmethod
     def simplify_html(html_content: str) -> str:
